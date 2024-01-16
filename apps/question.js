@@ -5,19 +5,28 @@ export const questionRouter = Router();
 
 questionRouter.get("/", async (req, res) => {
   const collection = db.collection("questions");
-  const keywords = req.query.keywords;
-  const categories = req.query.categories;
   const limit = req.query.limit || 10;
-
+  const keywords = req.query.keywords;
+  const categories = req.query.categories.split(" ");
+  console.log(`keywords:`, keywords);
+  console.log(`category:`, categories);
   const query = {};
+
+  const elemMatchConditions = categories.map((element) => {
+    console.log(`element`, element);
+    return {
+      ["category"]: { $elemMatch: { $eq: element } },
+    };
+  });
+  console.log(`elemMatchConditions:`, elemMatchConditions);
 
   if (keywords) {
     query.question = new RegExp(keywords, "i");
   }
   if (categories) {
-    query.category = category;
+    query.category = categories;
   }
-  console.log(query);
+
   try {
     const questions = await collection.find(query).limit(10).toArray();
     if (questions.length === 0) {
@@ -62,7 +71,7 @@ questionRouter.post("/", async (req, res) => {
   };
   try {
     const question = await collection.insertOne({ ...newQuestion });
-    console.log(question);
+
     return res.json({ message: "Create new question successfully" });
   } catch (err) {
     return res.status(418).json({
