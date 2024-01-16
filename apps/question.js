@@ -7,31 +7,29 @@ questionRouter.get("/", async (req, res) => {
   const collection = db.collection("questions");
   const limit = req.query.limit || 10;
   const keywords = req.query.keywords;
-  const categories = req.query.categories.split(" ");
+  const categories = req.query.categories;
+
+  const query = {};
   console.log(`keywords:`, keywords);
   console.log(`category:`, categories);
-  const query = {};
-
-  const elemMatchConditions = categories.map((element) => {
-    console.log(`element`, element);
-    return {
-      ["category"]: { $elemMatch: { $eq: element } },
-    };
-  });
-  console.log(`elemMatchConditions:`, elemMatchConditions);
 
   if (keywords) {
     query.question = new RegExp(keywords, "i");
   }
   if (categories) {
-    query.category = categories;
+    query.category = { $all: categories.split(",") };
+    console.log(query.category);
   }
 
   try {
-    const questions = await collection.find(query).limit(10).toArray();
+    const questions = await collection
+      .find(query)
+      .sort({ created_at: -1 })
+      .limit(limit)
+      .toArray();
     if (questions.length === 0) {
       return res.json({
-        message: "Fetching successfully. No data was found in collection",
+        message: "No data was found in collection",
       });
     } else {
       return res.json({ message: "Fetching successfully", data: questions });
@@ -68,6 +66,7 @@ questionRouter.post("/", async (req, res) => {
     description,
     category,
     created_at: new Date(),
+    vote: { upvote: 0, downvote: 0 },
   };
   try {
     const question = await collection.insertOne({ ...newQuestion });
@@ -92,11 +91,11 @@ questionRouter.put("/:questionId", async (req, res) => {
   };
 
   try {
-    const product = await collection.updateOne(
+    const question = await collection.updateOne(
       { _id: id },
       { $set: updatedQuestion }
     );
-    console.log(`Product from PUT method`, product);
+    console.log(`Product from PUT method`, question);
     return res.json({ message: "Question has update successfully" });
   } catch (err) {
     return res.status(500).json({
@@ -104,17 +103,44 @@ questionRouter.put("/:questionId", async (req, res) => {
     });
   }
 });
+questionRouter.patch("/:questionId", async (req, res) => {
+  const collection = db.collection("questions");
+  const id = new ObjectId(req.params.questionId);
+  const vote = req.query.vote;
+
+  if (["upvote", "downvote"].includes(vote)) {
+    const updateVote = `vote.${vote}`;
+    try {
+      await collection.updateOne({ _id: id }, { $inc: { [updateVote]: 1 } });
+      return res.json({ message: "Update Vote successfully" });
+    } catch {
+      return res.status(500).json({
+        message: "Fail to update vote",
+      });
+    }
+  } else {
+    return res.status(400).json({
+      message: "Invalid vote",
+    });
+  }
+});
 
 questionRouter.delete("/:questionId", async (req, res) => {
   const collection = db.collection("questions");
   const id = new ObjectId(req.params.questionId);
+  const commentCollection = db.collection("answers");
   try {
     const question = await collection.deleteOne({ _id: id });
+    //
+    await commentCollection.deleteMany({ questionId: req.params.questionId });
+    //
     console.log(question);
     if (question.deletedCount !== 0) {
       return res.json({ message: "Delete successfully" });
     } else {
-      return res.json({ message: "Fail to delete. id is not found" });
+      return res
+        .status(400)
+        .json({ message: "Fail to delete. id is not found" });
     }
   } catch (err) {
     return res.json({ message: "Fail to Delete" });

@@ -20,7 +20,7 @@ async function init() {
   app.use(express.urlencoded({ extended: false }));
 
   app.use("/questions", questionRouter);
-  app.use("/:questionsId/answers", answerRouter);
+  app.use("/questions", answerRouter);
   app.listen(port, () => {
     console.log(`Server is listening on port ${port}`);
   });
